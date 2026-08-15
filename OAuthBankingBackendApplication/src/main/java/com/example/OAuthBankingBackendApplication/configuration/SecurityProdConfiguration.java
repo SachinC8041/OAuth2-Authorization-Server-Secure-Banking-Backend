@@ -10,6 +10,7 @@
     import org.springframework.security.crypto.factory.PasswordEncoderFactories;
     import org.springframework.security.crypto.password.PasswordEncoder;
     import org.springframework.security.web.SecurityFilterChain;
+    import org.springframework.security.web.util.matcher.AnyRequestMatcher;
     import org.springframework.web.cors.CorsConfiguration;
     import org.springframework.web.cors.CorsConfigurationSource;
 
@@ -18,15 +19,15 @@
     import static org.springframework.security.config.Customizer.withDefaults;
 
     @Configuration
-    @Profile("!prod")
-    public class SecurityConfiguration {
+    @Profile("prod")
+    public class SecurityProdConfiguration {
 
         @Bean
         public SecurityFilterChain customSecurityFilterChain(HttpSecurity http) {
-
-            /*http.sessionManagement(sfc->sfc
-                    .sessionFixation()
-                    .newSession());*/
+            http.sessionManagement(hsm->hsm.invalidSessionUrl("/invalidsession")
+                                                                                .maximumSessions(3)
+                                                                                .maxSessionsPreventsLogin(true)
+                                                                                .expiredUrl("/expiredUrl"));
             http.cors(corsConfig->corsConfig.configurationSource(new CorsConfigurationSource() {
                 @Override
                 public CorsConfiguration getCorsConfiguration(HttpServletRequest request) {
@@ -40,17 +41,11 @@
                 }
             }));
 
-            http.sessionManagement(hsm->hsm.invalidSessionUrl("/invalidUrl")
-                    .maximumSessions(3)
-                    .maxSessionsPreventsLogin(true)
-                    .expiredUrl("/expiredUrl"));
-
-            http.redirectToHttps((https) -> https.disable())
-                    .csrf(csrfconfig->csrfconfig.disable());
-
+            http.redirectToHttps((https) -> https.requestMatchers(AnyRequestMatcher.INSTANCE));
+            http.csrf(csrfconfig->csrfconfig.disable());
             http.authorizeHttpRequests(request -> request
                     .requestMatchers("/myaccount", "/myloans", "/mybalance", "/mycards","/user").authenticated()
-                    .requestMatchers("/notices", "/mycontact", "/error","/register","/invalidUrl","/expiredUrl").permitAll()
+                    .requestMatchers("/mynotices", "/mycontact", "/error","/registeruser","/invalidSession","/expiredUrl").permitAll()
                     .anyRequest().authenticated());
             http.formLogin(withDefaults());
 //            http.httpBasic(withDefaults());
