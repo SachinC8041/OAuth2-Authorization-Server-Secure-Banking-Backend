@@ -1,80 +1,186 @@
-    package com.example.OAuthBankingBackendApplication.configuration;
+package com.example.OAuthBankingBackendApplication.configuration;
 
-    import com.example.OAuthBankingBackendApplication.security.CustomAccessDeniedHandler;
-    import com.example.OAuthBankingBackendApplication.security.CustomAuthenticationEntryPoint;
-    import jakarta.servlet.http.HttpServletRequest;
-    import org.springframework.context.annotation.Bean;
-    import org.springframework.context.annotation.Configuration;
-    import org.springframework.context.annotation.Profile;
-    import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-    import org.springframework.security.crypto.factory.PasswordEncoderFactories;
-    import org.springframework.security.crypto.password.PasswordEncoder;
-    import org.springframework.security.web.SecurityFilterChain;
-    import org.springframework.security.web.util.matcher.AnyRequestMatcher;
-    import org.springframework.web.cors.CorsConfiguration;
-    import org.springframework.web.cors.CorsConfigurationSource;
+import com.example.OAuthBankingBackendApplication.filter.CsrfCookieFilter;
+import com.example.OAuthBankingBackendApplication.security.CustomAccessDeniedHandler;
+import com.example.OAuthBankingBackendApplication.security.CustomAuthenticationEntryPoint;
 
-    import java.util.Collections;
+import jakarta.servlet.http.HttpServletRequest;
 
-    import static org.springframework.security.config.Customizer.withDefaults;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.factory.PasswordEncoderFactories;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.util.matcher.AnyRequestMatcher;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
 
-    @Configuration
-    @Profile("prod")
-    public class SecurityProdConfiguration {
+import java.util.Collections;
 
-        @Bean
-        public SecurityFilterChain customSecurityFilterChain(HttpSecurity http) {
-            http.sessionManagement(hsm->hsm.invalidSessionUrl("/invalidsession")
-                                                                                .maximumSessions(3)
-                                                                                .maxSessionsPreventsLogin(true)
-                                                                                .expiredUrl("/expiredUrl"));
-            http.cors(corsConfig->corsConfig.configurationSource(new CorsConfigurationSource() {
-                @Override
-                public CorsConfiguration getCorsConfiguration(HttpServletRequest request) {
-                    CorsConfiguration config = new CorsConfiguration();
-                    config.setAllowedOrigins(Collections.singletonList("*"));
-                    config.setAllowedMethods(Collections.singletonList("*"));
-                    config.setAllowedHeaders(Collections.singletonList("*"));
-                    config.setAllowCredentials(true);
-                    config.setMaxAge(3600L);
-                    return config;
-                }
-            }));
+import static org.springframework.security.config.Customizer.withDefaults;
 
-            http.redirectToHttps((https) -> https.requestMatchers(AnyRequestMatcher.INSTANCE));
-            http.csrf(csrfconfig->csrfconfig.disable());
-            http.authorizeHttpRequests(request -> request
-                    .requestMatchers("/myaccount", "/myloans", "/mybalance", "/mycards","/user").authenticated()
-                    .requestMatchers("/mynotices", "/mycontact", "/error","/registeruser","/invalidSession","/expiredUrl").permitAll()
-                    .anyRequest().authenticated());
-            http.formLogin(withDefaults());
-//            http.httpBasic(withDefaults());
-            http.httpBasic(hbc-> hbc.authenticationEntryPoint(new CustomAuthenticationEntryPoint()));
-            http.exceptionHandling(cad->cad.accessDeniedHandler(new CustomAccessDeniedHandler()));
-            return http.build();
-        }
+/**
+ * Security configuration for the "prod" profile.
+ *
+ * Differences from {@link SecurityConfiguration}:
+ *   - HTTPS is enforced for every request instead of disabled.
+ *
+ * Disabled / experimental configuration lives in the ARCHIVED CONFIGURATION
+ * section at the bottom of this file.
+ */
+@Configuration
+@Profile("prod")
+public class SecurityProdConfiguration {
 
-        /*@Bean
-        public UserDetailsService userDetailsService() {
-            UserDetails user = User.withUsername("sachin").password("{noop}P@$$word@1234").roles("USER").build();
-            UserDetails admin = User.withUsername("suraj").password("{bcrypt}$2a$12$qV7DKGF.5Yv35LUT46FAy.4t2N2xfzfblEf/CXAaZO9LZUr5ZRiNa").roles("ADMIN").build();
-            return new InMemoryUserDetailsManager(user, admin);
-        }*/
+    // ------------------------------------------------------------------
+    // Beans
+    // ------------------------------------------------------------------
 
-        /*@Bean
-        public UserDetailsService userDetailsService(DataSource dataSource)
-        {
-            return new JdbcUserDetailsManager(dataSource);
-        }*/
+    @Bean
+    public SecurityFilterChain customSecurityFilterChain(HttpSecurity http) {
 
-        @Bean
-        PasswordEncoder passwordEncoder() {
-            return PasswordEncoderFactories.createDelegatingPasswordEncoder();
-        }
+        // --- CORS ----------------------------------------------------------
+        // FIXME: setAllowedOrigins("*") together with setAllowCredentials(true) is
+        // rejected by Spring at request time. Either list the real production
+        // origins here, or switch to config.setAllowedOriginPatterns(...).
+        http.cors(corsConfig -> corsConfig.configurationSource(new CorsConfigurationSource() {
+            @Override
+            public CorsConfiguration getCorsConfiguration(HttpServletRequest request) {
+                CorsConfiguration config = new CorsConfiguration();
+                config.setAllowedOrigins(Collections.singletonList("*"));
+                config.setAllowedMethods(Collections.singletonList("*"));
+                config.setAllowedHeaders(Collections.singletonList("*"));
+                config.setAllowCredentials(true);
+                config.setMaxAge(3600L);
+                return config;
+            }
+        }));
 
-        /*@Bean
-        public CompromisedPasswordChecker checkCompromisedPassword()
-        {
-            return new HaveIBeenPwnedRestApiPasswordChecker();
-        }*/
+        // --- Session / security context -------------------------------------
+        http.securityContext(contextConfig -> contextConfig.requireExplicitSave(false))
+            .sessionManagement(sessionConfig -> sessionConfig.sessionCreationPolicy(SessionCreationPolicy.ALWAYS));
+
+        // --- Channel security ------------------------------------------------
+        http.redirectToHttps(https -> https.requestMatchers(AnyRequestMatcher.INSTANCE));
+
+        // --- Authorization rules ---------------------------------------------
+        // FIXME: these paths no longer match any controller. The controllers map
+        // /account, /loans, /balance, /cards, /notices, /contact and /register.
+        // As written, /notices, /contact and /register fall through to
+        // anyRequest().authenticated() and are blocked in prod.
+        http.authorizeHttpRequests(request -> request
+                .requestMatchers("/myaccount", "/myloans", "/mybalance", "/mycards", "/user").authenticated()
+                .requestMatchers("/mynotices", "/mycontact", "/error", "/registeruser", "/invalidSession", "/expiredUrl").permitAll()
+                .anyRequest().authenticated());
+
+        // --- CSRF -------------------------------------------------------------
+        CsrfTokenRequestAttributeHandler csrfTokenRequestAttributeHandler = new CsrfTokenRequestAttributeHandler();
+
+        http.csrf(csrfConfig -> csrfConfig
+                .csrfTokenRequestHandler(csrfTokenRequestAttributeHandler)
+                .ignoringRequestMatchers("/contact", "/register")
+                .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()))
+            .addFilterAfter(new CsrfCookieFilter(), BasicAuthenticationFilter.class);
+
+        // --- Authentication mechanisms ----------------------------------------
+        http.formLogin(withDefaults());
+        http.httpBasic(hbc -> hbc.authenticationEntryPoint(new CustomAuthenticationEntryPoint()));
+
+        // --- Exception handling ------------------------------------------------
+        http.exceptionHandling(cad -> cad.accessDeniedHandler(new CustomAccessDeniedHandler()));
+
+        return http.build();
     }
+
+    @Bean
+    PasswordEncoder passwordEncoder() {
+        return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+    }
+
+
+    /* ======================================================================
+     * ARCHIVED CONFIGURATION - nothing below this line is active.
+     * Uncomment a block to re-enable it and add the imports listed with it.
+     * ======================================================================
+     */
+
+    /* ----------------------------------------------------------------------
+     * [1] Concurrent session control.
+     *     Goes back INSIDE customSecurityFilterChain(), MERGED into the
+     *     existing sessionManagement(...) call - do not declare it twice.
+     * ----------------------------------------------------------------------
+     *
+     * http.sessionManagement(hsm -> hsm.invalidSessionUrl("/invalidsession")
+     *         .maximumSessions(3)
+     *         .maxSessionsPreventsLogin(true)
+     *         .expiredUrl("/expiredUrl"));
+     */
+
+    /* ----------------------------------------------------------------------
+     * [2] Plain HTTP Basic, without the custom entry point.
+     *     Replaces the http.httpBasic(...) line in the filter chain.
+     * ----------------------------------------------------------------------
+     *
+     * http.httpBasic(withDefaults());
+     */
+
+    /* ----------------------------------------------------------------------
+     * [3] In-memory users. NOT suitable for the prod profile - kept only so
+     *     this file stays in sync with SecurityConfiguration.
+     *
+     * Imports:
+     *   org.springframework.security.core.userdetails.User
+     *   org.springframework.security.core.userdetails.UserDetails
+     *   org.springframework.security.core.userdetails.UserDetailsService
+     *   org.springframework.security.provisioning.InMemoryUserDetailsManager
+     * ----------------------------------------------------------------------
+     *
+     * @Bean
+     * public UserDetailsService userDetailsService() {
+     *     UserDetails user = User.withUsername("sachin")
+     *             .password("{noop}P@$$word@1234")
+     *             .roles("USER")
+     *             .build();
+     *     UserDetails admin = User.withUsername("suraj")
+     *             .password("{bcrypt}$2a$12$qV7DKGF.5Yv35LUT46FAy.4t2N2xfzfblEf/CXAaZO9LZUr5ZRiNa")
+     *             .roles("ADMIN")
+     *             .build();
+     *     return new InMemoryUserDetailsManager(user, admin);
+     * }
+     */
+
+    /* ----------------------------------------------------------------------
+     * [4] JDBC-backed users (default Spring schema).
+     *
+     * Imports:
+     *   javax.sql.DataSource
+     *   org.springframework.security.core.userdetails.UserDetailsService
+     *   org.springframework.security.provisioning.JdbcUserDetailsManager
+     * ----------------------------------------------------------------------
+     *
+     * @Bean
+     * public UserDetailsService userDetailsService(DataSource dataSource) {
+     *     return new JdbcUserDetailsManager(dataSource);
+     * }
+     */
+
+    /* ----------------------------------------------------------------------
+     * [5] Compromised-password check (HaveIBeenPwned API).
+     *
+     * Imports:
+     *   org.springframework.security.authentication.password.CompromisedPasswordChecker
+     *   org.springframework.security.web.authentication.password.HaveIBeenPwnedRestApiPasswordChecker
+     * ----------------------------------------------------------------------
+     *
+     * @Bean
+     * public CompromisedPasswordChecker checkCompromisedPassword() {
+     *     return new HaveIBeenPwnedRestApiPasswordChecker();
+     * }
+     */
+}

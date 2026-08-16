@@ -2,7 +2,9 @@ package com.example.OAuthBankingBackendApplication.service;
 
 import com.example.OAuthBankingBackendApplication.entity.Customer;
 import com.example.OAuthBankingBackendApplication.repository.CustomerRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+
+import lombok.RequiredArgsConstructor;
+
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
@@ -13,21 +15,28 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+/**
+ * Loads a {@link Customer} by email and adapts it to Spring Security's
+ * {@link UserDetails} contract. Used by both authentication providers.
+ */
 @Service
+@RequiredArgsConstructor
 public class BankUserDetailsService implements UserDetailsService {
 
     private final CustomerRepository customerRepository;
 
-    @Autowired
-    public BankUserDetailsService(CustomerRepository customerRepository) {
-        this.customerRepository = customerRepository;
-    }
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         Customer customer = customerRepository.findByEmail(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with username :"+username));
-        List<GrantedAuthority> grantedAuthorities = List.of(new SimpleGrantedAuthority(customer.getRole()));
-        return new User(customer.getEmail(),customer.getPwd(),grantedAuthorities);
-        };
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with username :" + username));
 
+        // NOTE: SimpleGrantedAuthority rejects a null or blank value, so a customer
+        // row with an empty role column fails login with IllegalArgumentException
+        // rather than a normal authentication error.
+        // NOTE: roles are stored without the ROLE_ prefix, so hasRole("ADMIN") will
+        // not match - use hasAuthority("ADMIN") if you add role-based rules later.
+        List<GrantedAuthority> grantedAuthorities = List.of(new SimpleGrantedAuthority(customer.getRole()));
+
+        return new User(customer.getEmail(), customer.getPwd(), grantedAuthorities);
+    }
 }

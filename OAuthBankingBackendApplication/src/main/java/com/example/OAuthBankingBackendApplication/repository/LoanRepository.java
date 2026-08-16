@@ -1,6 +1,7 @@
 package com.example.OAuthBankingBackendApplication.repository;
 
 import com.example.OAuthBankingBackendApplication.entity.Loans;
+
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
 
@@ -10,5 +11,4 @@ import java.util.List;
 public interface LoanRepository extends CrudRepository<Loans, Long> {
 
     List<Loans> findByCustomerIdOrderByStartDtDesc(long customerId);
-
 }

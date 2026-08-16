@@ -1,17 +1,20 @@
 package com.example.OAuthBankingBackendApplication.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+
 import lombok.Getter;
 import lombok.Setter;
 
 import java.sql.Date;
 
 @Entity
-@Getter @Setter
+@Getter
+@Setter
 @Table(name = "notice_details")
 public class Notice {
 
@@ -25,6 +28,8 @@ public class Notice {
     @Column(name = "notice_details")
     private String noticeDetails;
 
+    // NOTE: field names are misspelled (noticBegDt / noticEndDt). Renaming them
+    // changes the JSON keys the frontend receives, so they are left as-is.
     @Column(name = "notice_beg_dt")
     private Date noticBegDt;
 
@@ -38,5 +43,4 @@ public class Notice {
     @JsonIgnore
     @Column(name = "update_dt")
     private Date updateDt;
-
 }

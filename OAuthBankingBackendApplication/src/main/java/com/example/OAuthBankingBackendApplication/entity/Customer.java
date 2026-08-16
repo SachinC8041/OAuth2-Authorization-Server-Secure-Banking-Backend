@@ -1,9 +1,14 @@
 package com.example.OAuthBankingBackendApplication.entity;
 
-
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import jakarta.persistence.*;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+
 import lombok.Getter;
 import lombok.Setter;
 
@@ -12,7 +17,7 @@ import java.util.Date;
 @Entity
 @Getter
 @Setter
-public class Customer{
+public class Customer {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -20,7 +25,7 @@ public class Customer{
     private Long id;
 
     @Column(nullable = false)
-    private String name ;
+    private String name;
 
     @Column(nullable = false)
     private String email;
@@ -33,13 +38,7 @@ public class Customer{
 
     private String role;
 
-    @Column(name = "create_dt")
     @JsonIgnore
+    @Column(name = "create_dt")
     private Date createDt;
-
-
-
-
-
-
 }

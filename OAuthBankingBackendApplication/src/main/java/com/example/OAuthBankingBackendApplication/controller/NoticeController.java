@@ -2,7 +2,9 @@ package com.example.OAuthBankingBackendApplication.controller;
 
 import com.example.OAuthBankingBackendApplication.entity.Notice;
 import com.example.OAuthBankingBackendApplication.repository.NoticeRepository;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,18 +17,16 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class NoticeController {
 
+    private static final long CACHE_SECONDS = 60L;
+
     private final NoticeRepository noticeRepository;
 
     @GetMapping("/notices")
     public ResponseEntity<List<Notice>> getNotices() {
         List<Notice> notices = noticeRepository.findAllActiveNotices();
-        if (notices != null) {
-            return ResponseEntity.ok()
-                    .cacheControl(CacheControl.maxAge(60, TimeUnit.SECONDS))
-                    .body(notices);
-        } else {
-            return null;
-        }
-    }
 
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.maxAge(CACHE_SECONDS, TimeUnit.SECONDS))
+                .body(notices);
+    }
 }
