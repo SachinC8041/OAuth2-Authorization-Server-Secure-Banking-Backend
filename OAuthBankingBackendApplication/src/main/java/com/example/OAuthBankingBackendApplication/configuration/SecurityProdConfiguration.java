@@ -46,14 +46,11 @@ public class SecurityProdConfiguration {
     public SecurityFilterChain customSecurityFilterChain(HttpSecurity http) {
 
         // --- CORS ----------------------------------------------------------
-        // FIXME: setAllowedOrigins("*") together with setAllowCredentials(true) is
-        // rejected by Spring at request time. Either list the real production
-        // origins here, or switch to config.setAllowedOriginPatterns(...).
         http.cors(corsConfig -> corsConfig.configurationSource(new CorsConfigurationSource() {
             @Override
             public CorsConfiguration getCorsConfiguration(HttpServletRequest request) {
                 CorsConfiguration config = new CorsConfiguration();
-                config.setAllowedOrigins(Collections.singletonList("*"));
+                config.setAllowedOrigins(Collections.singletonList("http://localhost:4200"));
                 config.setAllowedMethods(Collections.singletonList("*"));
                 config.setAllowedHeaders(Collections.singletonList("*"));
                 config.setAllowCredentials(true);
@@ -70,13 +67,9 @@ public class SecurityProdConfiguration {
         http.redirectToHttps(https -> https.requestMatchers(AnyRequestMatcher.INSTANCE));
 
         // --- Authorization rules ---------------------------------------------
-        // FIXME: these paths no longer match any controller. The controllers map
-        // /account, /loans, /balance, /cards, /notices, /contact and /register.
-        // As written, /notices, /contact and /register fall through to
-        // anyRequest().authenticated() and are blocked in prod.
         http.authorizeHttpRequests(request -> request
-                .requestMatchers("/myaccount", "/myloans", "/mybalance", "/mycards", "/user").authenticated()
-                .requestMatchers("/mynotices", "/mycontact", "/error", "/registeruser", "/invalidSession", "/expiredUrl").permitAll()
+                .requestMatchers("/account", "/loans", "/balance", "/cards", "/user").authenticated()
+                .requestMatchers("/notices", "/contact", "/error", "/register", "/invalidUrl", "/expiredUrl").permitAll()
                 .anyRequest().authenticated());
 
         // --- CSRF -------------------------------------------------------------
