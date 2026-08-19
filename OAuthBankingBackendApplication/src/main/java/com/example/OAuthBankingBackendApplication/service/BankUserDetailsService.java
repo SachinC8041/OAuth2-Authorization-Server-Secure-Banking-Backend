@@ -14,6 +14,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Loads a {@link Customer} by email and adapts it to Spring Security's
@@ -35,8 +36,11 @@ public class BankUserDetailsService implements UserDetailsService {
         // rather than a normal authentication error.
         // NOTE: roles are stored without the ROLE_ prefix, so hasRole("ADMIN") will
         // not match - use hasAuthority("ADMIN") if you add role-based rules later.
-        List<GrantedAuthority> grantedAuthorities = List.of(new SimpleGrantedAuthority(customer.getRole()));
+//        List<GrantedAuthority> grantedAuthorities = List.of(new SimpleGrantedAuthority(customer.getRole()));
 
-        return new User(customer.getEmail(), customer.getPwd(), grantedAuthorities);
+
+        List<GrantedAuthority> authorities = customer.getAuthorities().stream().map(authority -> new
+                SimpleGrantedAuthority(authority.getName())).collect(Collectors.toList());
+        return new User(customer.getEmail(), customer.getPwd(), authorities);
     }
 }

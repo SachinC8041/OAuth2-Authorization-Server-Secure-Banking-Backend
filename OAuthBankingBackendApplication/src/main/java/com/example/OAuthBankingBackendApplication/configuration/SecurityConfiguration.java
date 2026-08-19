@@ -48,7 +48,7 @@ public class SecurityConfiguration {
             @Override
             public CorsConfiguration getCorsConfiguration(HttpServletRequest request) {
                 CorsConfiguration config = new CorsConfiguration();
-                config.setAllowedOrigins(Collections.singletonList("http://localhost:4200"));
+                config.setAllowedOrigins(Collections.singletonList("https://localhost:4200"));
                 config.setAllowedMethods(Collections.singletonList("*"));
                 config.setAllowedHeaders(Collections.singletonList("*"));
                 config.setAllowCredentials(true);
@@ -65,11 +65,23 @@ public class SecurityConfiguration {
         http.redirectToHttps(https -> https.disable());
 
         // --- Authorization rules ---------------------------------------------
+        /*http.authorizeHttpRequests(request -> request
+                .requestMatchers("/account").hasAuthority("VIEWACCOUNT")
+                .requestMatchers("/loans").hasAuthority("VIEWLOANS")
+                .requestMatchers( "/balance").hasAuthority("VIEWBALANCE")
+                .requestMatchers("/cards").hasAuthority("VIEWCARDS")
+                .requestMatchers( "/user").authenticated()
+                .requestMatchers("/notices", "/contact", "/error", "/register", "/invalidUrl", "/expiredUrl").permitAll()
+                .anyRequest().authenticated());*/
+
         http.authorizeHttpRequests(request -> request
-                .requestMatchers("/account", "/loans", "/balance", "/cards", "/user").authenticated()
+                .requestMatchers("/account").hasRole("USER")
+                .requestMatchers("/loans").hasRole("USER")
+                .requestMatchers( "/balance").hasAnyRole("USER","ADMIN")
+                .requestMatchers("/cards").hasRole("USER")
+                .requestMatchers( "/user").authenticated()
                 .requestMatchers("/notices", "/contact", "/error", "/register", "/invalidUrl", "/expiredUrl").permitAll()
                 .anyRequest().authenticated());
-
         // --- CSRF -------------------------------------------------------------
         CsrfTokenRequestAttributeHandler csrfTokenRequestAttributeHandler = new CsrfTokenRequestAttributeHandler();
 

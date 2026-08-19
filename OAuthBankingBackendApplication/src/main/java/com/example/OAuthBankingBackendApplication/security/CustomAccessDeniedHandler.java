@@ -19,7 +19,7 @@ public class CustomAccessDeniedHandler implements AccessDeniedHandler {
 
     // NOTE: CustomAuthenticationEntryPoint uses "bank-error-message". Worth
     // settling on one prefix for both handlers.
-    private static final String DENIED_HEADER = "eazybank-denied-reason";
+    private static final String DENIED_HEADER = "sbibank-denied-reason";
     private static final String DEFAULT_MESSAGE = "Authorization failed";
 
     @Override
