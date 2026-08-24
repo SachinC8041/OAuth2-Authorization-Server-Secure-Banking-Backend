@@ -1,16 +1,17 @@
 package com.example.OAuthBankingBackendApplication.configuration;
 
-import com.example.OAuthBankingBackendApplication.filter.CsrfCookieFilter;
+import com.example.OAuthBankingBackendApplication.filter.*;
 import com.example.OAuthBankingBackendApplication.security.CustomAccessDeniedHandler;
 import com.example.OAuthBankingBackendApplication.security.CustomAuthenticationEntryPoint;
-
 import jakarta.servlet.http.HttpServletRequest;
-
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -21,6 +22,7 @@ import org.springframework.security.web.util.matcher.AnyRequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.Collections;
 
 import static org.springframework.security.config.Customizer.withDefaults;
@@ -53,6 +55,7 @@ public class SecurityProdConfiguration {
                 config.setAllowedOrigins(Collections.singletonList("https://localhost:4200"));
                 config.setAllowedMethods(Collections.singletonList("*"));
                 config.setAllowedHeaders(Collections.singletonList("*"));
+                config.setExposedHeaders(Arrays.asList("Authorization"));
                 config.setAllowCredentials(true);
                 config.setMaxAge(3600L);
                 return config;
@@ -60,8 +63,9 @@ public class SecurityProdConfiguration {
         }));
 
         // --- Session / security context -------------------------------------
-        http.securityContext(contextConfig -> contextConfig.requireExplicitSave(false))
-            .sessionManagement(sessionConfig -> sessionConfig.sessionCreationPolicy(SessionCreationPolicy.ALWAYS));
+        /*http.securityContext(contextConfig -> contextConfig.requireExplicitSave(false))
+            .sessionManagement(sessionConfig -> sessionConfig.sessionCreationPolicy(SessionCreationPolicy.ALWAYS));*/
+        http.sessionManagement(sessionConfig -> sessionConfig.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
         // --- Channel security ------------------------------------------------
         http.redirectToHttps(https -> https.requestMatchers(AnyRequestMatcher.INSTANCE));
@@ -82,17 +86,22 @@ public class SecurityProdConfiguration {
                 .requestMatchers( "/balance").hasAnyRole("USER","ADMIN")
                 .requestMatchers("/cards").hasRole("USER")
                 .requestMatchers( "/user").authenticated()
-                .requestMatchers("/notices", "/contact", "/error", "/register", "/invalidUrl", "/expiredUrl").permitAll()
+                .requestMatchers("/notices", "/contact", "/error", "/register", "/invalidUrl", "/expiredUrl","/apiLogin").permitAll()
                 .anyRequest().authenticated());
 
         // --- CSRF -------------------------------------------------------------
         CsrfTokenRequestAttributeHandler csrfTokenRequestAttributeHandler = new CsrfTokenRequestAttributeHandler();
 
         http.csrf(csrfConfig -> csrfConfig
-                .csrfTokenRequestHandler(csrfTokenRequestAttributeHandler)
-                .ignoringRequestMatchers("/contact", "/register")
-                .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()))
-            .addFilterAfter(new CsrfCookieFilter(), BasicAuthenticationFilter.class);
+                        .csrfTokenRequestHandler(csrfTokenRequestAttributeHandler)
+                        .ignoringRequestMatchers("/contact", "/register","/apiLogin")
+                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()))
+                .addFilterAfter(new CsrfCookieFilter(), BasicAuthenticationFilter.class)
+                .addFilterBefore(new RequestValidationBeforeFilter(), BasicAuthenticationFilter.class)
+                .addFilterAfter(new AuthoritiesLogginAfterFilter(), BasicAuthenticationFilter.class)
+                .addFilterBefore(new JWTTokenValidationFilter(), BasicAuthenticationFilter.class)
+                .addFilterAfter(new JWTTokenGeneratorFiler(),BasicAuthenticationFilter.class);
+                /*.addFilterAt(new AuthoritiesLoggingAtFilter(), BasicAuthenticationFilter.class);*/
 
         // --- Authentication mechanisms ----------------------------------------
         http.formLogin(withDefaults());
@@ -108,6 +117,16 @@ public class SecurityProdConfiguration {
     PasswordEncoder passwordEncoder() {
         return PasswordEncoderFactories.createDelegatingPasswordEncoder();
     }
+
+    @Bean
+    public AuthenticationManager authenticationManager(UserDetailsService userDetailsService , PasswordEncoder passwordEncoder)
+    {
+        BankUsernamePwdProdAuthenticationProvider authenticationProvider = new BankUsernamePwdProdAuthenticationProvider(userDetailsService, passwordEncoder);
+        ProviderManager providerManager = new ProviderManager(authenticationProvider);
+        providerManager.setEraseCredentialsAfterAuthentication(false);
+        return providerManager;
+    }
+
 
 
     /* ======================================================================
