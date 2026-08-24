@@ -21,7 +21,7 @@ import java.util.stream.Collectors;
 
 public class JWTTokenGeneratorFiler extends OncePerRequestFilter {
 
-    private static final long TOKEN_VALIDITY_MS = 30_000_000L; //
+    private static final long TOKEN_VALIDITY_MS = 30_000_099L; //
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
