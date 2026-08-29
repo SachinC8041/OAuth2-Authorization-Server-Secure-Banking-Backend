@@ -20,10 +20,7 @@ JWT-authenticated API with role-based authorization, CSRF protection for the
 cookie-based paths, ownership checks on every record lookup, and JSON error
 responses in place of the servlet container's defaults.
 
-> **On the name.** Authentication is currently a hand-rolled JWT implementation
-> on top of HTTP Basic, not an OAuth 2.0 flow. The repository keeps its original
-> name; migrating to a proper OAuth 2.0 resource server is the first item on the
-> roadmap. Calling this an OAuth implementation today would be inaccurate.
+
 
 ## Table of contents
 
