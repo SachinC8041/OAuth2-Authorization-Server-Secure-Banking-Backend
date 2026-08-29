@@ -1,130 +1,148 @@
 package com.example.OAuthBankingBackendApplication.configuration;
 
-import com.example.OAuthBankingBackendApplication.filter.*;
+import com.example.OAuthBankingBackendApplication.constants.ApplicationConstants;
+import com.example.OAuthBankingBackendApplication.filter.AuthoritiesLoggingAfterFilter;
+import com.example.OAuthBankingBackendApplication.filter.CsrfCookieFilter;
+import com.example.OAuthBankingBackendApplication.filter.JwtTokenGeneratorFilter;
+import com.example.OAuthBankingBackendApplication.filter.JwtTokenValidatorFilter;
+import com.example.OAuthBankingBackendApplication.filter.RequestValidationBeforeFilter;
 import com.example.OAuthBankingBackendApplication.security.CustomAccessDeniedHandler;
 import com.example.OAuthBankingBackendApplication.security.CustomAuthenticationEntryPoint;
+import com.example.OAuthBankingBackendApplication.service.JwtService;
 
-import jakarta.servlet.http.HttpServletRequest;
-
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.crypto.factory.PasswordEncoderFactories;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.Arrays;
-import java.util.Collections;
-
-import static org.springframework.security.config.Customizer.withDefaults;
+import java.util.List;
 
 /**
- * Security configuration for all non-production profiles.
+ * Security configuration for every profile except {@code prod}.
  *
- * Disabled / experimental configuration lives in the ARCHIVED CONFIGURATION
- * section at the bottom of this file.
+ * <p>The counterpart is {@link SecurityProdConfiguration}. The pair is kept
+ * deliberately - profile-scoped configuration classes are the point of the
+ * exercise - but it carries a real trade-off: two files this similar drift
+ * apart. In the original version the production copy had lost its
+ * {@code PasswordEncoder} and {@code AuthenticationManager} beans and all four
+ * custom filters, so the {@code prod} profile could not start and had no token
+ * validation. Anything that must be true in both places now lives in
+ * {@link AuthenticationConfig}, and a single-class alternative is archived at
+ * the bottom of this file.
+ *
+ * <p>Difference from the production configuration: HTTPS redirection is disabled
+ * here rather than enforced.
+ *
+ * <h2>Filter order</h2>
+ * <pre>
+ *   RequestValidationBeforeFilter   (before BasicAuthenticationFilter)
+ *   JwtTokenValidatorFilter         (before BasicAuthenticationFilter)
+ *   BasicAuthenticationFilter
+ *   CsrfCookieFilter                (after  BasicAuthenticationFilter)
+ *   AuthoritiesLoggingAfterFilter   (after  BasicAuthenticationFilter)
+ *   JwtTokenGeneratorFilter         (after  BasicAuthenticationFilter)
+ * </pre>
  */
 @Configuration
 @Profile("!prod")
 public class SecurityConfiguration {
 
-    private static final String FRONTEND_ORIGIN = "http://localhost:4200";
+    private final List<String> allowedOrigins;
 
-    // ------------------------------------------------------------------
-    // Beans
-    // ------------------------------------------------------------------
+    public SecurityConfiguration(@Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
+        this.allowedOrigins = allowedOrigins;
+    }
 
     @Bean
-    public SecurityFilterChain customSecurityFilterChain(HttpSecurity http) {
+    public SecurityFilterChain customSecurityFilterChain(HttpSecurity http, JwtService jwtService) throws Exception {
 
-        // --- CORS ----------------------------------------------------------
-        http.cors(corsConfig -> corsConfig.configurationSource(new CorsConfigurationSource() {
-            @Override
-            public CorsConfiguration getCorsConfiguration(HttpServletRequest request) {
-                CorsConfiguration config = new CorsConfiguration();
-                config.setAllowedOrigins(Collections.singletonList("https://localhost:4200"));
-                config.setAllowedMethods(Collections.singletonList("*"));
-                config.setAllowedHeaders(Collections.singletonList("*"));
-                config.setExposedHeaders(Arrays.asList("Authorization"));
-                config.setAllowCredentials(true);
-                config.setMaxAge(3600L);
-                return config;
-            }
-        }));
+        AuthenticationEntryPoint authenticationEntryPoint = new CustomAuthenticationEntryPoint();
+        AccessDeniedHandler accessDeniedHandler = new CustomAccessDeniedHandler();
 
-        // --- Session / security context -------------------------------------
-        /*http.securityContext(contextConfig -> contextConfig.requireExplicitSave(false))
-            .sessionManagement(sessionConfig -> sessionConfig.sessionCreationPolicy(SessionCreationPolicy.ALWAYS));*/
-        http.sessionManagement(sessionConfig -> sessionConfig.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+        // --- CORS ------------------------------------------------------------
+        http.cors(cors -> cors.configurationSource(corsConfigurationSource()));
 
-        // --- Channel security ------------------------------------------------
+        // --- Session / security context ---------------------------------------
+        // Token based: nothing is kept server side between requests.
+        http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+
+        // --- Channel security --------------------------------------------------
+        // Disabled here, enforced in SecurityProdConfiguration. This is the one
+        // genuine difference between the two profiles.
         http.redirectToHttps(https -> https.disable());
 
-        // --- Authorization rules ---------------------------------------------
-        /*http.authorizeHttpRequests(request -> request
-                .requestMatchers("/account").hasAuthority("VIEWACCOUNT")
-                .requestMatchers("/loans").hasAuthority("VIEWLOANS")
-                .requestMatchers( "/balance").hasAuthority("VIEWBALANCE")
-                .requestMatchers("/cards").hasAuthority("VIEWCARDS")
-                .requestMatchers( "/user").authenticated()
-                .requestMatchers("/notices", "/contact", "/error", "/register", "/invalidUrl", "/expiredUrl").permitAll()
-                .anyRequest().authenticated());*/
-
-        http.authorizeHttpRequests(request -> request
-                .requestMatchers("/account").hasRole("USER")
-                .requestMatchers("/loans").hasRole("USER")
-                .requestMatchers( "/balance").hasAnyRole("USER","ADMIN")
-                .requestMatchers("/cards").hasRole("USER")
-                .requestMatchers( "/user").authenticated()
-                .requestMatchers("/notices", "/contact", "/error", "/register", "/invalidUrl", "/expiredUrl","/apiLogin").permitAll()
+        // --- Authorization rules -------------------------------------------------
+        // hasRole("USER") matches the authority ROLE_USER, so rows in the
+        // authorities table must carry the ROLE_ prefix.
+        http.authorizeHttpRequests(requests -> requests
+                .requestMatchers(ApplicationConstants.PUBLIC_ENDPOINTS).permitAll()
+                .requestMatchers("/account", "/loans", "/cards").hasRole("USER")
+                .requestMatchers("/balance").hasAnyRole("USER", "ADMIN")
+                .requestMatchers("/user").authenticated()
                 .anyRequest().authenticated());
-        // --- CSRF -------------------------------------------------------------
-        CsrfTokenRequestAttributeHandler csrfTokenRequestAttributeHandler = new CsrfTokenRequestAttributeHandler();
 
-        http.csrf(csrfConfig -> csrfConfig
-                        .csrfTokenRequestHandler(csrfTokenRequestAttributeHandler)
-                        .ignoringRequestMatchers("/contact", "/register","/apiLogin")
-                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()))
+        // --- CSRF -----------------------------------------------------------------
+        // The token goes into a readable cookie so the SPA can echo it back in the
+        // X-XSRF-TOKEN header. Endpoints reached before a token exists are exempt.
+        http.csrf(csrf -> csrf
+                .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+                .ignoringRequestMatchers(ApplicationConstants.CSRF_EXEMPT_ENDPOINTS)
+                .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()));
+
+        // --- Custom filters ---------------------------------------------------------
+        http.addFilterBefore(new RequestValidationBeforeFilter(), BasicAuthenticationFilter.class)
+                .addFilterBefore(new JwtTokenValidatorFilter(jwtService, authenticationEntryPoint),
+                        BasicAuthenticationFilter.class)
                 .addFilterAfter(new CsrfCookieFilter(), BasicAuthenticationFilter.class)
-                .addFilterBefore(new RequestValidationBeforeFilter(), BasicAuthenticationFilter.class)
-                .addFilterAfter(new AuthoritiesLogginAfterFilter(), BasicAuthenticationFilter.class)
-                .addFilterBefore(new JWTTokenValidationFilter(), BasicAuthenticationFilter.class)
-                .addFilterAfter(new JWTTokenGeneratorFiler(),BasicAuthenticationFilter.class);
-        /*.addFilterAt(new AuthoritiesLoggingAtFilter(), BasicAuthenticationFilter.class);*/
+                .addFilterAfter(new AuthoritiesLoggingAfterFilter(), BasicAuthenticationFilter.class)
+                .addFilterAfter(new JwtTokenGeneratorFilter(jwtService), BasicAuthenticationFilter.class);
 
-        // --- Authentication mechanisms ----------------------------------------
-        http.formLogin(withDefaults());
-        http.httpBasic(hbc -> hbc.authenticationEntryPoint(new CustomAuthenticationEntryPoint()));
+        // --- Authentication mechanisms ------------------------------------------------
+        // Form login is deliberately absent: it cannot work against a STATELESS
+        // chain, and this is a JSON API with no server-rendered login page.
+        http.httpBasic(basic -> basic.authenticationEntryPoint(authenticationEntryPoint));
 
-        // --- Exception handling ------------------------------------------------
-        http.exceptionHandling(cad -> cad.accessDeniedHandler(new CustomAccessDeniedHandler()));
+        // --- Exception handling ----------------------------------------------------------
+        http.exceptionHandling(exceptions -> exceptions
+                .authenticationEntryPoint(authenticationEntryPoint)
+                .accessDeniedHandler(accessDeniedHandler));
 
         return http.build();
     }
 
-    @Bean
-    PasswordEncoder passwordEncoder() {
-        return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+    /**
+     * CORS policy for the browser client.
+     *
+     * <p>Origins come from {@code app.cors.allowed-origins}. The original version
+     * declared a {@code FRONTEND_ORIGIN} constant on {@code http://} and then
+     * ignored it in favour of an inline {@code https://} literal, so the dev
+     * client was blocked by configuration that looked correct at a glance.
+     */
+    private CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(allowedOrigins);
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setExposedHeaders(List.of(ApplicationConstants.JWT_HEADER));
+        configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
     }
 
-    @Bean
-    public AuthenticationManager authenticationManager(UserDetailsService userDetailsService , PasswordEncoder passwordEncoder)
-    {
-        BankUsernamePwdProdAuthenticationProvider authenticationProvider = new BankUsernamePwdProdAuthenticationProvider(userDetailsService, passwordEncoder);
-        ProviderManager providerManager = new ProviderManager(authenticationProvider);
-        providerManager.setEraseCredentialsAfterAuthentication(false);
-        return providerManager;
-    }
 
     /* ======================================================================
      * ARCHIVED CONFIGURATION - nothing below this line is active.
@@ -133,10 +151,19 @@ public class SecurityConfiguration {
      */
 
     /* ----------------------------------------------------------------------
-     * [1] Concurrent session control.
-     *     Goes back INSIDE customSecurityFilterChain(), MERGED into the
-     *     existing sessionManagement(...) call - do not declare it twice.
+     * [1] Stateful sessions with concurrent session control.
+     *     Replaces the sessionManagement(...) line in the filter chain.
+     *
+     *     Only meaningful if the chain is NOT stateless - maximumSessions has
+     *     nothing to count when no session is ever created. Switch the policy to
+     *     ALWAYS first, which is why both lines appear together here.
+     *
+     * Imports:
+     *   org.springframework.security.config.http.SessionCreationPolicy
      * ----------------------------------------------------------------------
+     *
+     * http.securityContext(contextConfig -> contextConfig.requireExplicitSave(false))
+     *     .sessionManagement(sessionConfig -> sessionConfig.sessionCreationPolicy(SessionCreationPolicy.ALWAYS));
      *
      * http.sessionManagement(hsm -> hsm.invalidSessionUrl("/invalidUrl")
      *         .maximumSessions(3)
@@ -145,15 +172,61 @@ public class SecurityConfiguration {
      */
 
     /* ----------------------------------------------------------------------
-     * [2] Plain HTTP Basic, without the custom entry point.
-     *     Replaces the http.httpBasic(...) line in the filter chain.
+     * [2] Authority-based rules instead of role-based ones.
+     *     Replaces the authorizeHttpRequests(...) block above.
+     *
+     *     The difference worth remembering: hasRole("USER") looks for the
+     *     authority ROLE_USER, hasAuthority("VIEWACCOUNT") looks for exactly
+     *     that string. Whichever you pick, the authorities table has to agree -
+     *     a mismatch authenticates the customer and then denies them every
+     *     endpoint, which reads like a broken login.
      * ----------------------------------------------------------------------
      *
+     * http.authorizeHttpRequests(request -> request
+     *         .requestMatchers("/account").hasAuthority("VIEWACCOUNT")
+     *         .requestMatchers("/loans").hasAuthority("VIEWLOANS")
+     *         .requestMatchers("/balance").hasAuthority("VIEWBALANCE")
+     *         .requestMatchers("/cards").hasAuthority("VIEWCARDS")
+     *         .requestMatchers("/user").authenticated()
+     *         .requestMatchers("/notices", "/contact", "/error", "/register", "/invalidUrl", "/expiredUrl").permitAll()
+     *         .anyRequest().authenticated());
+     */
+
+    /* ----------------------------------------------------------------------
+     * [3] Form login, and plain HTTP Basic without the custom entry point.
+     *     Replaces the http.httpBasic(...) line.
+     *
+     *     formLogin needs a session-backed chain; against STATELESS it does
+     *     nothing useful. withDefaults() on httpBasic gives the stock
+     *     WWW-Authenticate challenge instead of the JSON 401 body.
+     *
+     * Imports:
+     *   static org.springframework.security.config.Customizer.withDefaults
+     * ----------------------------------------------------------------------
+     *
+     * http.formLogin(withDefaults());
      * http.httpBasic(withDefaults());
      */
 
     /* ----------------------------------------------------------------------
-     * [3] In-memory users (quick local testing).
+     * [4] AuthoritiesLoggingAtFilter, registered AT the position of
+     *     BasicAuthenticationFilter rather than before or after it.
+     *
+     *     addFilterAt does not replace the filter already there, and the order
+     *     between the two is undefined - which is why this stayed unused.
+     * ----------------------------------------------------------------------
+     *
+     * .addFilterAt(new AuthoritiesLoggingAtFilter(), BasicAuthenticationFilter.class);
+     */
+
+    /* ----------------------------------------------------------------------
+     * [5] In-memory users, for exercising the chain without a database.
+     *
+     *     Declaring this UserDetailsService bean replaces BankUserDetailsService,
+     *     so logins stop touching the customer table entirely. Note the two
+     *     password prefixes: {noop} stores the password as-is, {bcrypt} marks it
+     *     as already hashed. That prefix is what DelegatingPasswordEncoder reads
+     *     to decide which encoder should verify it.
      *
      * Imports:
      *   org.springframework.security.core.userdetails.User
@@ -177,7 +250,12 @@ public class SecurityConfiguration {
      */
 
     /* ----------------------------------------------------------------------
-     * [4] JDBC-backed users (default Spring schema).
+     * [6] JDBC-backed users using Spring's default schema.
+     *
+     *     Expects the users and authorities tables Spring Security ships with,
+     *     which are not the shape of this project's customer table. Worth
+     *     comparing against BankUserDetailsService, which exists precisely
+     *     because the schema here is custom.
      *
      * Imports:
      *   javax.sql.DataSource
@@ -192,7 +270,12 @@ public class SecurityConfiguration {
      */
 
     /* ----------------------------------------------------------------------
-     * [5] Compromised-password check (HaveIBeenPwned API).
+     * [7] Compromised-password check against the HaveIBeenPwned API.
+     *
+     *     Once this bean exists, Spring Security consults it during
+     *     authentication and throws CompromisedPasswordException for a breached
+     *     password. It makes an outbound HTTP call per login, so it belongs in
+     *     the production configuration rather than here.
      *
      * Imports:
      *   org.springframework.security.authentication.password.CompromisedPasswordChecker
@@ -202,6 +285,26 @@ public class SecurityConfiguration {
      * @Bean
      * public CompromisedPasswordChecker checkCompromisedPassword() {
      *     return new HaveIBeenPwnedRestApiPasswordChecker();
+     * }
+     */
+
+    /* ----------------------------------------------------------------------
+     * [8] The single-class alternative to this profile pair.
+     *
+     *     Drop @Profile from this class, delete SecurityProdConfiguration, take
+     *     Environment in the constructor, and branch on the one line that really
+     *     differs. Fewer files and no drift, at the cost of making the profile
+     *     mechanism less visible.
+     *
+     * Imports:
+     *   org.springframework.core.env.Environment
+     *   org.springframework.security.web.util.matcher.AnyRequestMatcher
+     * ----------------------------------------------------------------------
+     *
+     * if (environment.matchesProfiles("prod")) {
+     *     http.redirectToHttps(https -> https.requestMatchers(AnyRequestMatcher.INSTANCE));
+     * } else {
+     *     http.redirectToHttps(https -> https.disable());
      * }
      */
 }

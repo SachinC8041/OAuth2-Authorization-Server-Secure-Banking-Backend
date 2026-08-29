@@ -4,6 +4,15 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+
+target/
+.env
+*.log
+.idea/
+*.iml
+.DS_Store
+
+
 ### STS ###
 .apt_generated
 .classpath

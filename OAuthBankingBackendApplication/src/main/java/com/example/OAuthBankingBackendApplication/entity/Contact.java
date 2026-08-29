@@ -10,12 +10,16 @@ import lombok.Setter;
 
 import java.util.Date;
 
+/**
+ * A support enquiry raised through the public contact form.
+ */
 @Entity
+@Table(name = "contact_messages")
 @Getter
 @Setter
-@Table(name = "contact_messages")
 public class Contact {
 
+    /** Service request number, generated on save, e.g. {@code SR123456}. */
     @Id
     @Column(name = "contact_id")
     private String contactId;

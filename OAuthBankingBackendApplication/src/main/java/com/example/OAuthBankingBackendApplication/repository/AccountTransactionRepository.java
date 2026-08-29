@@ -10,5 +10,6 @@ import java.util.List;
 @Repository
 public interface AccountTransactionRepository extends JpaRepository<AccountTransactions, String> {
 
+    /** Statement lines for a customer, newest first. */
     List<AccountTransactions> findByCustomerIdOrderByTransactionDtDesc(long customerId);
 }

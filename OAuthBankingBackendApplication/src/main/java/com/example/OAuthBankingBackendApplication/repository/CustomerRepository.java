@@ -10,5 +10,6 @@ import java.util.Optional;
 @Repository
 public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
+    /** Looks a customer up by their login name. */
     Optional<Customer> findByEmail(String email);
 }

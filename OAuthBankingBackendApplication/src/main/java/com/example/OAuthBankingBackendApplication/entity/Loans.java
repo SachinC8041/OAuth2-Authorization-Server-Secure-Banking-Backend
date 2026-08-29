@@ -10,10 +10,13 @@ import lombok.Setter;
 
 import java.sql.Date;
 
+/**
+ * A loan taken out by a customer, with its repayment position.
+ */
 @Entity
+@Table(name = "loans")
 @Getter
 @Setter
-@Table(name = "loans")
 public class Loans {
 
     @Id

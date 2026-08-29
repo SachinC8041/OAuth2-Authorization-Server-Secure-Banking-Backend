@@ -1,0 +1,28 @@
+# Local MySQL for development. The schema in docs/db is applied on first start.
+#
+#   docker compose up -d
+#   ./mvnw spring-boot:run
+#
+# The container keeps its data in a named volume; `docker compose down -v`
+# removes it and lets the schema re-apply from scratch.
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: banking-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: password1234
+      MYSQL_DATABASE: bankingbackend
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docs/db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-ppassword1234"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mysql-data:

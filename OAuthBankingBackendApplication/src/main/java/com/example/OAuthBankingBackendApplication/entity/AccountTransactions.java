@@ -10,10 +10,17 @@ import lombok.Setter;
 
 import java.sql.Date;
 
+/**
+ * One posted movement on an account, plus the balance that resulted from it.
+ *
+ * <p>Amounts are held as {@code int} to match the existing schema. Money belongs in
+ * {@code BigDecimal} with an explicit scale; that migration is tracked in the
+ * project roadmap rather than done here, because it needs a schema change too.
+ */
 @Entity
+@Table(name = "account_transactions")
 @Getter
 @Setter
-@Table(name = "account_transactions")
 public class AccountTransactions {
 
     @Id
@@ -32,6 +39,7 @@ public class AccountTransactions {
     @Column(name = "transaction_summary")
     private String transactionSummary;
 
+    /** {@code Deposit} or {@code Withdrawal}. */
     @Column(name = "transaction_type")
     private String transactionType;
 

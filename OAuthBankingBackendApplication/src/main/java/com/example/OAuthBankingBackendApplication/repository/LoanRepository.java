@@ -10,5 +10,6 @@ import java.util.List;
 @Repository
 public interface LoanRepository extends CrudRepository<Loans, Long> {
 
+    /** Loans held by a customer, most recently started first. */
     List<Loans> findByCustomerIdOrderByStartDtDesc(long customerId);
 }

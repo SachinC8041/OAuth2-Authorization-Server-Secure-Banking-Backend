@@ -36,6 +36,7 @@ public class JWTTokenGeneratorFiler extends OncePerRequestFilter {
                                                 ApplicationConstants.JWT_SECRET_DEFAULT_VALUE);
                 /*String secret = env.getProperty(ApplicationConstants.JWT_SECRET_KEY);*/
 
+
                 SecretKey secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
 
                 String authorities = authentication.getAuthorities().stream()

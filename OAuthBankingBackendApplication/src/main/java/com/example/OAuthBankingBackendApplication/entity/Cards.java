@@ -10,10 +10,13 @@ import lombok.Setter;
 
 import java.sql.Date;
 
+/**
+ * A card issued to a customer, with its limit and current utilisation.
+ */
 @Entity
+@Table(name = "cards")
 @Getter
 @Setter
-@Table(name = "cards")
 public class Cards {
 
     @Id
