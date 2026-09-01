@@ -1,6 +1,6 @@
 package com.example.OAuthBankingBackendApplication.repository;
 
-import com.example.OAuthBankingBackendApplication.entity.Customer;
+import com.example.OAuthBankingBackendApplication.model.Customer;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;

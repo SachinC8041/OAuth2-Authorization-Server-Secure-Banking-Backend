@@ -39,7 +39,7 @@ INSERT INTO loans (loan_number, customer_id, start_dt, loan_type, total_loan, am
 
 -- One notice inside today's window and one already expired, so the active-notice
 -- query has something to filter out.
-INSERT INTO notice_details (notice_id, notice_summary, notice_details, notice_beg_dt, notice_end_dt, create_dt, update_dt) VALUES
+INSERT INTO notice_details (notice_id, notice_summary, notice_details, notic_beg_dt, notic_end_dt, create_dt, update_dt) VALUES
   (1, 'Interest rates revised', 'Savings interest revised with effect from this month.',
       DATEADD('DAY', -7, CURRENT_DATE), DATEADD('DAY', 30, CURRENT_DATE), CURRENT_DATE, NULL),
   (2, 'Expired campaign',       'This notice is outside its display window.',

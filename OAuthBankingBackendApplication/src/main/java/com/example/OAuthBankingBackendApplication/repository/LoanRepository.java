@@ -1,6 +1,6 @@
 package com.example.OAuthBankingBackendApplication.repository;
 
-import com.example.OAuthBankingBackendApplication.entity.Loans;
+import com.example.OAuthBankingBackendApplication.model.Loans;
 
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
